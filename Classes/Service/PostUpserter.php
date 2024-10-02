@@ -58,7 +58,6 @@ class PostUpserter
     public function upsertPost(PostDTO $dto, int $storagePid, ApiClientInterface $apiClient): NewsInstagram
     {
         $newsItem = $this->newsRepository->findOneByInstagramId($dto->getId()) ?? new NewsInstagram();
-        $importedCat = $this->extConf['imported_category'];
 
         $filteredText = EmojiRemover::filter($dto->getCaption());
 
@@ -74,18 +73,6 @@ class PostUpserter
         $newsItem
             ->setInstagramId($dto->getId())
             ->setPostedBy($apiClient->getFeed()->getUsername())
-            ->setMediaType($dto->getMediaType());
-        if ($importedCat){
-            foreach (explode(',', $imortedCat) as $cat){
-                $category = $this->categoryRepository->findByUid($cat);
-                if ($category) {
-                    $newsItem->addCategory($category);
-                } else {
-                    $this->logger->warning(sprintf('Category with ID "%s" was not found', $cat));
-                }
-            }
-        }
-
         /** @var \DateTimeImmutable $postedAt */
         $postedAt = $dto->getTimestamp();
         $newsItem->setDatetime((new \DateTime())->setTimestamp($postedAt->getTimestamp()));
