@@ -58,6 +58,7 @@ class PostUpserter
     public function upsertPost(PostDTO $dto, int $storagePid, ApiClientInterface $apiClient): NewsInstagram
     {
         $newsItem = $this->newsRepository->findOneByInstagramId($dto->getId()) ?? new NewsInstagram();
+        $importedCat = $this->extConf['imported_category'];
 
         $filteredText = EmojiRemover::filter($dto->getCaption());
 
@@ -74,6 +75,16 @@ class PostUpserter
             ->setInstagramId($dto->getId())
             ->setPostedBy($apiClient->getFeed()->getUsername())
             ->setMediaType($dto->getMediaType());
+        if ($importedCat){
+            foreach (explode(',', $imortedCat) as $cat){
+                $category = $this->categoryRepository->findByUid($cat);
+                if ($category) {
+                    $newsItem->addCategory($category);
+                } else {
+                    $this->logger->warning(sprintf('Category with ID "%s" was not found', $cat));
+                }
+            }
+        }
 
         /** @var \DateTimeImmutable $postedAt */
         $postedAt = $dto->getTimestamp();
@@ -113,19 +124,20 @@ class PostUpserter
 
     private function processPostMedia(NewsInstagram $newsItem, PostDTO $dto): NewsInstagram
     {
+        $imagesShowInPreview = $this->extConf['images_showinpreview'];
         switch ($dto->getMediaType()) {
             case Post::MEDIA_TYPE_IMAGE:
                 $fileObject = $this->downloadFile($dto->getMediaUrl(), Post::IMAGE_FILE_EXT);
-                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME);
+                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME, $imagesShowInPreview);
 
                 break;
             case Post::MEDIA_TYPE_VIDEO:
                 $fileObject = $this->downloadFile($dto->getMediaUrl(), Post::VIDEO_FILE_EXT);
-                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME);
+                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME, 0);
 
                 // Download thumbnail image
                 $fileObject = $this->downloadFile($dto->getThumbnailUrl(), Post::IMAGE_FILE_EXT);
-                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME);
+                $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME, $imagesShowInPreview);
 
                 break;
             case Post::MEDIA_TYPE_CAROUSEL_ALBUM:
@@ -139,12 +151,12 @@ class PostUpserter
                                 Post::IMAGE_FILE_EXT
                             );
 
-                            $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME);
+                            $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME, $imagesShowInPreview);
 
                             break;
                         case Post::MEDIA_TYPE_VIDEO:
                             $fileObject = $this->downloadFile($child->getMediaUrl(), Post::VIDEO_FILE_EXT);
-                            $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME);
+                            $this->addFileToFal($fileObject, $newsItem, self::TABLENAME, self::MEDIA_FIELDNAME, 0);
 
                             break;
                     }
@@ -179,7 +191,7 @@ class PostUpserter
         return $file;
     }
 
-    private function addFileToFal(File $file, NewsInstagram $newElement, string $tablename, string $fieldname): void
+    private function addFileToFal(File $file, NewsInstagram $newElement, string $tablename, string $fieldname, int $showinpreview): void
     {
         $fields = [
             'pid' => $newElement->getPid(),
@@ -191,6 +203,7 @@ class PostUpserter
             'sorting_foreign' => $file->getUid(),
             'tstamp' => time(),
             'crdate' => time(),
+            'showinpreview' => $showinpreview,
         ];
 
         /** @var ConnectionPool $connectionPool */

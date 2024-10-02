@@ -1,2 +1,6 @@
 # cat=General; type=string; label=Local path to store downloaded files (relativ from project root)
 local_file_storage_path = /public/fileadmin/instagram
+# cat=General; type=integer; label=Set showinpreview for images. 0 = False, 1 = Listview and Detail, 2 = Listview only
+images_showinpreview = 1
+# cat=General; type=integer; label=Set category for imported news
+imported_category = 0
